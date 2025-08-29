@@ -1,0 +1,56 @@
+Merging Two storage
+
+1. Create Physical Volumes:
+sudo pvcreate /dev/sdb
+sudo pvcreate /dev/sdc  
+
+
+2. Create Volume Group:
+sudo vgcreate storage_vg /dev/sdb /dev/sdc 
+
+3. Create Logical Volume:
+sudo lvcreate -l 100%VG -n storage_lv storage_vg
+
+4. Format the Logical Volume:
+sudo mkfs.ext4 /dev/storage_vg/storage_lv
+
+5. Get the UUID:
+sudo blkid /dev/storage_vg/storage_lv  
+
+6. Create Mount Point:
+sudo mkdir /mnt/storage
+
+7. Edit /etc/fstab
+	Add this line to /etc/fstab:
+UUID=your-actual-uuid-here /mnt/storage ext4 defaults 0 2 
+
+8. Mount:
+sudo mount -a
+
+
+
+==================================
+
+
+Commands to Check LV and PV:
+
+Physical Volumes (PV):
+sudo pvs          # Short format
+sudo pvdisplay    # Detailed format
+sudo pvscan       # Scan for PVs
+
+Logical Volumes (LV):
+sudo lvs          # Short format  
+sudo lvdisplay    # Detailed format
+sudo lvscan       # Scan for LVs
+
+
+Volume Groups (VG):
+sudo vgs          # Short format
+sudo vgdisplay    # Detailed format
+
+
+
+What Goes in /etc/fstab:
+Replace this template with your actual UUID from the blkid command:
+UUID=12345678-abcd-ef12-3456-789012345678 /mnt/storage ext4 defaults 0 2
