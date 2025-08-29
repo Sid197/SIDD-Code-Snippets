@@ -1,0 +1,302 @@
+NFS Tutorial
+
+On Ubuntu Server (192.168.1.14)
+1. Install NFS Server
+sudo apt update
+sudo apt install nfs-kernel-server
+
+2. Create a directory to share
+sudo mkdir -p /srv/nfs/share
+sudo chown nobody:nogroup /srv/nfs/share
+sudo chmod 755 /srv/nfs/share
+
+3. Configure NFS exports
+sudo nano /etc/exports  [Add this line to the file:]
+	/srv/nfs/share 192.168.1.121(rw,sync,no_subtree_check,no_root_squash)
+
+4. Apply the export configuration
+sudo exportfs -arv
+sudo systemctl restart nfs-kernel-server
+
+5. Configure firewall (if enabled)
+sudo ufw allow from 192.168.1.121 to any port nfs
+sudo ufw allow from 192.168.1.121 to any port 2049
+
+6. Check NFS status
+sudo systemctl status nfs-kernel-server
+sudo exportfs -v
+
+=========================
+
+On Ubuntu Client (192.168.1.121)
+1. Install NFS client
+sudo apt update
+sudo apt install nfs-common
+
+2. Create mount point
+sudo mkdir -p /mnt/nfs/share
+
+3. Test the connection
+showmount -e 192.168.1.14
+
+
+4. Mount the NFS share
+sudo mount -t nfs 192.168.1.14:/srv/nfs/share /mnt/nfs/share
+
+
+5. Verify the mount
+df -h
+mount | grep nfs
+
+6. Make it permanent (optional) [Add to /etc/fstab]
+sudo nano /etc/fstab [Add this line to the file:]
+	192.168.1.14:/srv/nfs/share /mnt/nfs/share nfs defaults 0 0
+
+
+
+===========================================
+
+
+
+
+Common Errors and Solutions
+
+1).Error: "mount.nfs: access denied by server"
+Solution:
+# On server, check exports
+sudo exportfs -v
+
+# Restart NFS services
+sudo systemctl restart nfs-kernel-server
+sudo systemctl restart rpcbind
+
+2).Error: "mount.nfs: Connection refused"
+Solution:
+# Check if NFS is running on server
+sudo systemctl status nfs-kernel-server
+
+# Check if ports are open
+sudo netstat -tulpn | grep :2049
+
+
+
+3).Error: "mount.nfs: No such file or directory"
+Solution:
+# Verify the shared directory exists on server
+ls -la /srv/nfs/share
+
+# Check exports syntax
+sudo exportfs -arv
+
+4).Error: Permission denied when accessing files
+Solution:
+# On server, adjust permissions
+sudo chown -R nobody:nogroup /srv/nfs/share
+sudo chmod -R 755 /srv/nfs/share
+
+
+======================================
+
+
+Testing the Setup
+
+
+On Server:
+# Create a test file
+echo "Hello from NFS server" | sudo tee /srv/nfs/share/test.txt
+
+On Client:
+# Check if file is accessible
+cat /mnt/nfs/share/test.txt
+
+# Create a file from client
+echo "Hello from NFS client" | sudo tee /mnt/nfs/share/client-test.txt
+
+
+
+=========================================================
+
+Troubleshooting Commands
+# Check NFS services status
+sudo systemctl status nfs-kernel-server rpcbind
+
+# View active exports
+sudo exportfs -v
+
+# Check NFS logs
+sudo journalctl -u nfs-kernel-server -f
+
+# Test NFS connectivity
+rpcinfo -p 192.168.1.14
+
+
+
+==========================================================
+
+Complete NFS Mount Removal Guide
+
+Prerequisites:
+1.Root or sudo access on both client and server
+2.SSH access to both systems
+3.Knowledge of current mount points and shared directories
+
+
+
+Quick Summary for Your Setup:
+
+On Client (192.168.1.121):
+# 1. Backup any important data first
+sudo cp -r /mnt/nfs/share/* /backup/location/
+# 2. Unmount
+sudo umount /mnt/nfs/share
+# 3. Remove from fstab
+sudo nano /etc/fstab  # Remove NFS line
+# 4. Remove mount point
+sudo rmdir /mnt/nfs/share
+
+On Server (192.168.1.14):
+# 1. Remove export
+sudo nano /etc/exports  # Comment out or remove the share line
+# 2. Refresh exports
+sudo exportfs -ra
+# 3. Handle shared directory (backup first!)
+ls -la /srv/nfs/share  # Check contents
+# Then either keep as regular folder or remove if not needed
+
+
+
+
+Step 1: Backup Important Data (CRITICAL)
+On NFS Client
+# Check what's in the mounted directory
+ls -la /mnt/nfs/share
+
+
+Verify no critical processes are using the mount
+# Backup any important files if needed
+sudo cp -r /mnt/nfs/share/* /backup/location/
+
+sudo lsof /mnt/nfs/share
+sudo fuser -v /mnt/nfs/share
+
+
+Step 2: Client-Side Removal
+
+2.1 Stop any services using the NFS mount
+# Stop services that might be using the NFS mount
+sudo systemctl stop [service-name]
+
+# Kill any processes using the mount (if safe to do so)
+sudo fuser -km /mnt/nfs/share
+
+2.2 Unmount the NFS share
+# Standard unmount
+sudo umount /mnt/nfs/share
+
+# Verify unmount was successful
+df -h | grep nfs
+mount | grep nfs
+
+
+2.3 Remove from automatic mounting# Edit fstab to remove the NFS entry
+sudo cp /etc/fstab /etc/fstab.backup
+sudo nano /etc/fstab
+
+# Remove or comment out the line like:
+# 192.168.1.14:/srv/nfs/share /mnt/nfs/share nfs defaults 0 0
+
+2.4 Remove mount point directory
+# Remove the mount point directory
+sudo rmdir /mnt/nfs/share
+
+# Remove parent directories if they're empty and no longer needed
+sudo rmdir /mnt/nfs  # only if empty
+
+
+2.5 Clean up NFS client packages (optional)
+# If you no longer need NFS client functionality
+sudo apt remove nfs-common
+sudo apt autoremove 
+
+
+
+Step 3: Server-Side Removal
+
+3.1 Remove the export configuration
+# Backup current exports
+sudo cp /etc/exports /etc/exports.backup
+
+# Edit exports file
+sudo nano /etc/exports
+
+# Remove or comment out the line:
+# /srv/nfs/share 192.168.1.121(rw,sync,no_subtree_check,no_root_squash)
+
+
+3.2 Update export table
+# Refresh the export table
+sudo exportfs -ra
+
+# Verify the export is removed
+sudo exportfs -v
+
+3.3 Handle the shared directory
+# Option 1: Keep the directory and data
+sudo ls -la /srv/nfs/share  # verify contents
+# Directory remains as regular folder
+
+# Option 2: Remove directory and data (BE CAREFUL!)
+# Only if you're sure you don't need the data
+sudo rm -rf /srv/nfs/share
+sudo rmdir /srv/nfs  # only if empty
+
+3.4 Stop NFS services (if no other exports exist)
+# Check if other exports exist
+sudo exportfs -v
+
+# If no other exports, you can stop NFS services
+sudo systemctl stop nfs-kernel-server
+sudo systemctl disable nfs-kernel-server
+
+# Remove NFS server packages (optional)
+sudo apt remove nfs-kernel-server
+sudo apt autoremove
+
+
+Step 4: Verification and Cleanup
+
+4.1 Verify client cleanup
+# Check no NFS mounts remain
+df -h | grep nfs
+mount | grep nfs
+
+# Check fstab is clean
+cat /etc/fstab | grep -v "^#" | grep nfs
+
+# Verify mount points removed
+ls -la /mnt/
+
+4.2 Verify server cleanup
+# Check no exports remain
+sudo exportfs -v
+
+# Check NFS service status
+sudo systemctl status nfs-kernel-server
+
+# Check if shared directory handled appropriately
+ls -la /srv/nfs/
+
+
+4.3 Network cleanup
+# On server: Remove firewall rules if no longer needed
+sudo ufw delete allow from 192.168.1.121 to any port nfs
+sudo ufw delete allow from 192.168.1.121 to any port 2049
+
+# Test that NFS connection is no longer possible
+# On client:
+showmount -e 192.168.1.14  # Should show no exports or connection refused
+
+
+
+
+
