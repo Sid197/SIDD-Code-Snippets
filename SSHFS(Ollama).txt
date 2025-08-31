@@ -1,0 +1,74 @@
+SSHFS(Ollama)
+
+**SSHFS Tutorial**
+
+**Prerequisites:**
+
+*Root or Sudo access on client and server
+*SSH access to both systems
+*Knowledge of current mount points and shared dir.
+
+Step1: Client-Side Setup
+1.Install OpenSSH (if not already installed) on the client:
+sudo apt install openssh-client
+
+2.Create a mount point for the SSHFS share :
+sudo mkdir -p /mnt/sshfs
+
+3.Mount the SSHFS share using following command(replace '192.168.1.14' with your server's IP address):
+sudo sshfs 192.168.1.14:path/to/share /mnt/sshfs
+
+4.Verify the mount
+df -h | grep sshfs
+mount | grep sshfs  
+
+
+Step 2: Server-Side Setup
+1. Install OpenSSH (if not already installed) on the server:
+sudo apt install openssh-server
+
+2. Create a directory to share using SSHFS:
+sudo mkdir -p /path/to/share
+
+3. Configure SSHFS shares by adding the following line to `/etc/exports` (replace `192.168.1.121` with your client's IP address):
+/path/to/share 192.168.1.121(ro,async,no_subtree_check)
+
+4. Apply the export configuration:
+sudo exportfs -arv
+
+
+Step 3: Testing and Verification
+1.Test SSHFS connectivity from the client:
+ssh 192.168.1.14
+cd /path/to/share
+
+2.Verify that files can be accessed and written:
+echo "Hello from SSHFS" | sudo tee /mnt/sshfs/test.txt
+
+
+Step 4: Unmounting the SSHFS Share
+1.Stop any service using the SSHFS mount:
+sudo systemctl stop [service-name]
+
+2.Unmount the SSHFS share:
+sudo unmount /mnt/sshfs
+
+3.Verify that the mount is no longer present:
+df -h | grep sshfs
+mount | grep sshfs
+
+
+Step 5:Cleaning Up
+1.Remove any temporary files or Dir:
+sudo rm -rf /path/to/share/temp
+
+2.Remove the SSHFS mount point dir (if its no longer needed):
+sudo rmdir /mnt/sshfs
+
+3.Cleanup SSHFS packages (optional):
+sudo apt remove sshfs
+sudo apt autoremove
+
+
+
+
