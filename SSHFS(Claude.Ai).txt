@@ -1,0 +1,512 @@
+SSHFS(Claude.Ai)
+
+# SSHFS Setup Guide - Ubuntu Remote File Access
+
+## Overview
+This guide demonstrates how to use SSHFS to mount a remote Ubuntu filesystem over SSH, allowing Ubuntu 2 (192.168.1.121) to access files on Ubuntu 1 (192.168.1.14) as if they were local directories.
+
+**Network Setup:**
+- **Server (Ubuntu 1):** 192.168.1.14
+- **Client (Ubuntu 2):** 192.168.1.121
+
+---
+
+## Prerequisites
+
+### On Both Systems
+- Ubuntu with network connectivity
+- SSH access enabled
+- User accounts with appropriate permissions
+
+### Check Network Connectivity
+```bash
+# From client (192.168.1.121), test connection to server
+ping 192.168.1.14
+```
+
+---
+
+## Step 1: Server Setup (Ubuntu 1 - 192.168.1.14)
+
+### 1.1 Install and Configure SSH Server
+```bash
+# Update package list
+sudo apt update
+
+# Install OpenSSH server
+sudo apt install openssh-server
+
+# Start and enable SSH service
+sudo systemctl start ssh
+sudo systemctl enable ssh
+
+# Check SSH service status
+sudo systemctl status ssh
+```
+
+### 1.2 Configure SSH (Optional but Recommended)
+```bash
+# Edit SSH configuration
+sudo nano /etc/ssh/sshd_config
+```
+
+**Key settings to verify/modify:**
+```
+Port 22
+PermitRootLogin no
+PasswordAuthentication yes
+PubkeyAuthentication yes
+```
+
+### 1.3 Restart SSH Service
+```bash
+sudo systemctl restart ssh
+```
+
+### 1.4 Configure Firewall (if enabled)
+```bash
+# Allow SSH through firewall
+sudo ufw allow ssh
+sudo ufw allow 22
+
+# Check firewall status
+sudo ufw status
+```
+
+### 1.5 Create Directory to Share (Example)
+```bash
+# Create a directory to share
+mkdir -p ~/shared_folder
+echo "Hello from server!" > ~/shared_folder/test.txt
+
+# Set appropriate permissions
+chmod 755 ~/shared_folder
+```
+
+---
+
+## Step 2: Client Setup (Ubuntu 2 - 192.168.1.121)
+
+### 2.1 Install SSHFS
+```bash
+# Update package list
+sudo apt update
+
+# Install SSHFS
+sudo apt install sshfs
+
+# Verify installation
+sshfs --version
+```
+
+### 2.2 Create Mount Point
+```bash
+# Create local directory for mounting
+mkdir -p ~/remote_server
+
+# Alternative: Create mount point in /mnt (requires sudo)
+sudo mkdir -p /mnt/server_share
+sudo chown $USER:$USER /mnt/server_share
+```
+
+---
+
+## Step 3: Basic SSHFS Usage
+
+### 3.1 Test SSH Connection First
+```bash
+# Test SSH connection to server
+ssh username@192.168.1.14
+
+# If successful, logout
+exit
+```
+
+### 3.2 Mount Remote Directory
+```bash
+# Basic mount command (replace 'username' with actual username)
+sshfs username@192.168.1.14:/home/username/shared_folder ~/remote_server
+
+# Alternative: Mount entire home directory
+sshfs username@192.168.1.14:/home/username ~/remote_server
+
+# Mount to /mnt location
+sshfs username@192.168.1.14:/home/username/shared_folder /mnt/server_share
+```
+
+### 3.3 Verify Mount
+```bash
+# Check if mount is successful
+ls -la ~/remote_server
+
+# Check mounted filesystems
+df -h | grep sshfs
+
+# Or use mount command
+mount | grep sshfs
+```
+
+### 3.4 Test File Operations
+```bash
+# Navigate to mounted directory
+cd ~/remote_server
+
+# List contents
+ls -la
+
+# Create a test file
+echo "Hello from client!" > test_from_client.txt
+
+# Read existing file
+cat test.txt
+```
+
+---
+
+## Step 4: Advanced SSHFS Options
+
+### 4.1 Mount with Specific Options
+```bash
+# Mount with custom options
+sshfs username@192.168.1.14:/home/username/shared_folder ~/remote_server \
+    -o allow_other,default_permissions,uid=$(id -u),gid=$(id -g)
+```
+
+### 4.2 Common SSHFS Options
+```bash
+# Reconnect automatically on connection loss
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server -o reconnect
+
+# Enable compression
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server -o compression=yes
+
+# Specify SSH port (if non-standard)
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server -o port=2222
+
+# Cache for better performance
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server -o cache=yes
+
+# Combined options
+sshfs username@192.168.1.14:/home/username/shared_folder ~/remote_server \
+    -o reconnect,compression=yes,cache=yes,allow_other,default_permissions
+```
+
+---
+
+## Step 5: SSH Key Authentication (Recommended)
+
+### 5.1 Generate SSH Key Pair (on client)
+```bash
+# Generate SSH key pair
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+
+# Press Enter to accept default location (~/.ssh/id_rsa)
+# Optionally set a passphrase
+```
+
+### 5.2 Copy Public Key to Server
+```bash
+# Copy public key to server
+ssh-copy-id username@192.168.1.14
+
+# Alternative manual method
+cat ~/.ssh/id_rsa.pub | ssh username@192.168.1.14 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+```
+
+### 5.3 Test Key Authentication
+```bash
+# Test SSH with key authentication
+ssh username@192.168.1.14
+
+# Should connect without password prompt
+exit
+```
+
+### 5.4 Mount with Key Authentication
+```bash
+# Now SSHFS will use key authentication automatically
+sshfs username@192.168.1.14:/home/username/shared_folder ~/remote_server
+```
+
+---
+
+## Step 6: Unmounting and Management
+
+### 6.1 Unmount SSHFS
+```bash
+# Unmount the remote filesystem
+fusermount -u ~/remote_server
+
+# Alternative method
+umount ~/remote_server
+
+# Force unmount (if needed)
+fusermount -uz ~/remote_server
+```
+
+### 6.2 Check Mount Status
+```bash
+# List all SSHFS mounts
+mount | grep sshfs
+
+# Check specific mount point
+mountpoint ~/remote_server
+```
+
+---
+
+## Step 7: Automatic Mounting with /etc/fstab
+
+### 7.1 Create Fstab Entry
+```bash
+# Edit fstab file
+sudo nano /etc/fstab
+
+# Add entry (replace username and paths as needed)
+username@192.168.1.14:/home/username/shared_folder /home/localuser/remote_server fuse.sshfs defaults,_netdev,users,idmap=user,IdentityFile=/home/localuser/.ssh/id_rsa,allow_other,reconnect 0 0
+```
+
+### 7.2 Test Fstab Mount
+```bash
+# Test mounting from fstab
+sudo mount -a
+
+# Or mount specific entry
+sudo mount ~/remote_server
+```
+
+---
+
+## Step 8: Creating a Systemd Service (Alternative Auto-Mount)
+
+### 8.1 Create Systemd Service File
+```bash
+sudo nano /etc/systemd/system/sshfs-server.service
+```
+
+### 8.2 Service Configuration
+```ini
+[Unit]
+Description=SSHFS Mount for Remote Server
+After=network.target
+
+[Service]
+Type=forking
+User=username
+ExecStart=/usr/bin/sshfs username@192.168.1.14:/home/username/shared_folder /home/username/remote_server -o reconnect,compression=yes,allow_other
+ExecStop=/bin/fusermount -u /home/username/remote_server
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 8.3 Enable and Start Service
+```bash
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable service
+sudo systemctl enable sshfs-server.service
+
+# Start service
+sudo systemctl start sshfs-server.service
+
+# Check status
+sudo systemctl status sshfs-server.service
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Permission Denied
+```bash
+# Check SSH connectivity first
+ssh username@192.168.1.14
+
+# Verify user exists and has proper permissions
+ls -la /home/username/
+
+# Try mounting with debug output
+sshfs username@192.168.1.14:/home/username/shared_folder ~/remote_server -o debug
+```
+
+#### 2. Connection Refused
+```bash
+# Check if SSH service is running on server
+sudo systemctl status ssh
+
+# Check firewall settings
+sudo ufw status
+
+# Verify correct IP address
+ping 192.168.1.14
+```
+
+#### 3. Mount Point Busy
+```bash
+# Check what's using the mount point
+lsof ~/remote_server
+
+# Force unmount
+fusermount -uz ~/remote_server
+
+# Try mounting again
+```
+
+#### 4. Stale Mount
+```bash
+# If mount appears to hang
+fusermount -uz ~/remote_server
+
+# Remove and recreate mount point
+rmdir ~/remote_server
+mkdir ~/remote_server
+```
+
+### Debug Commands
+```bash
+# Mount with verbose output
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server -o debug,sshfs_debug
+
+# Check system logs
+journalctl -u ssh
+journalctl -f | grep sshfs
+```
+
+---
+
+## Security Considerations
+
+### 1. SSH Hardening
+- Use SSH key authentication instead of passwords
+- Change default SSH port if needed
+- Disable root login
+- Use fail2ban for brute force protection
+
+### 2. SSHFS Security Options
+```bash
+# More secure mounting options
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server \
+    -o StrictHostKeyChecking=yes,UserKnownHostsFile=/home/username/.ssh/known_hosts
+```
+
+### 3. Network Security
+- Ensure both systems are on a trusted network
+- Consider VPN for remote access over internet
+- Use firewall rules to restrict SSH access
+
+---
+
+## Performance Optimization
+
+### 1. Cache Settings
+```bash
+# Enable caching for better performance
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server \
+    -o cache=yes,kernel_cache,compression=yes
+```
+
+### 2. Connection Options
+```bash
+# Optimize for different scenarios
+# For LAN (low latency, high bandwidth)
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server \
+    -o cache=yes,compression=no
+
+# For WAN (high latency, limited bandwidth)
+sshfs username@192.168.1.14:/path/to/remote ~/remote_server \
+    -o cache=yes,compression=yes,Ciphers=aes128-ctr
+```
+
+---
+
+## Useful Scripts
+
+### Auto-Mount Script
+```bash
+#!/bin/bash
+# save as ~/bin/mount-server.sh
+
+REMOTE_USER="username"
+REMOTE_HOST="192.168.1.14"
+REMOTE_PATH="/home/username/shared_folder"
+LOCAL_MOUNT="$HOME/remote_server"
+
+# Check if already mounted
+if mountpoint -q "$LOCAL_MOUNT"; then
+    echo "Already mounted at $LOCAL_MOUNT"
+    exit 0
+fi
+
+# Create mount point if it doesn't exist
+mkdir -p "$LOCAL_MOUNT"
+
+# Mount with SSHFS
+sshfs "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH" "$LOCAL_MOUNT" \
+    -o reconnect,compression=yes,cache=yes
+
+echo "Mounted $REMOTE_HOST:$REMOTE_PATH at $LOCAL_MOUNT"
+```
+
+### Auto-Unmount Script
+```bash
+#!/bin/bash
+# save as ~/bin/unmount-server.sh
+
+LOCAL_MOUNT="$HOME/remote_server"
+
+if mountpoint -q "$LOCAL_MOUNT"; then
+    fusermount -u "$LOCAL_MOUNT"
+    echo "Unmounted $LOCAL_MOUNT"
+else
+    echo "$LOCAL_MOUNT is not mounted"
+fi
+```
+
+### Make Scripts Executable
+```bash
+chmod +x ~/bin/mount-server.sh
+chmod +x ~/bin/unmount-server.sh
+```
+
+---
+
+## Summary
+
+SSHFS provides a convenient way to access remote files over SSH without complex NFS or Samba configurations. The basic workflow is:
+
+1. **Server:** Ensure SSH server is running and accessible
+2. **Client:** Install SSHFS and create mount point
+3. **Mount:** Use `sshfs user@server:path local_mount_point`
+4. **Use:** Access remote files as if they were local
+5. **Unmount:** Use `fusermount -u mount_point` when done
+
+For production use, consider setting up SSH key authentication and configuring automatic mounting via fstab or systemd services.
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Install SSHFS
+sudo apt install sshfs
+
+# Basic mount
+sshfs user@192.168.1.14:/path ~/mount_point
+
+# Mount with options
+sshfs user@192.168.1.14:/path ~/mount_point -o reconnect,compression=yes
+
+# Unmount
+fusermount -u ~/mount_point
+
+# Check mounts
+mount | grep sshfs
+
+# Debug
+sshfs user@192.168.1.14:/path ~/mount_point -o debug
+```

@@ -1,0 +1,65 @@
+DEB Package Workflow
+
+
+Prepares the environment (permissions, directories, configs).
+control : Is a metadata file. It contains the some imp details about the data e.g. Description,Maintainer/owner, Dependencies.
+postinst:[postinst is file that is run after the installation of docker services ]
+
+
+/usr/bin/mywebsite.sh && setup.sh are to be saved in /usr/bin/ for system-wide accessiblilty.  
+
+This file runs after installation use from --> /usr/bin/setup.sh
+setup.sh [This is a main setup script]--->
+Setup file is responsible for  initilziation of downloading / creating  docker services.
+Every service has its own dockerfile and docker yaml file.
+
+It holds info of version or release of web application.
+Tells or directs the docker file to storage mount point for video recordings.
+
+If "0.0.0.0:2375 /lib/systemd/system/docker.service" this is already created in root directory it tell tell dockerfile that port for docker is already opened or expose.
+2375 is port used for docker. 
+
+
+Environment setup using setup.sh file:
+Running setup.sh likely launches these with Docker.
+These scripts call Docker Compose to spin up infrastructure.
+The package ships docker-compose YAMLs for different services (Kafka, Redis, Kong API gateway, Monitoring stack, DB, etc.).
+
+
+/usr/share/redx-installer : 
+/home/easemyai/installer_new_linux/redx-installer/usr/share/redx-installer --> 
+create_topic.sh ---> creates various  topics using kafka services required for vms.
+kafka.sh --> remove or deleting mounts of kafka.
+
+For user management and for storing other essential data mongo database is used .
+[init-mongo.js] ----> Connecting to mongo db service.
+
+In monitoring _configs:
+There are monitoring services used and there configurations yaml file are there
+grafana_data
+promethe_data
+promtail
+
+
+In [config.ini]:
+Save user-specific settings and customizations for a program. 
+
+redis ---> redis is used used for cache memory [redis-entrypoint.sh  ] file is used .
+
+
+Dockerfiles:
+docker-compose.db.yml
+docker-compose.kafka.yml
+docker-compose.kong.yml
+docker-compose.monitoring.yml
+docker-compose.prod.yml
+docker-compose.redis.yml
+This above mentioned docker compose yaml files contains each service's configurations.
+
+Kong:
+kong_setup.sh ----> is used for connecting microservices with each other and it also connects frontend with backend with API's . 
+
+
+stop.sh ---> to down or remove docker stack from services.
+
+

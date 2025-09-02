@@ -1,0 +1,21 @@
+Dockerfile Directories 
+FROM <base-image>
+#Base iamge
+COPY <src> <dest>
+#copy files
+ADD <src> <dest>
+#copy +auto unzip url's
+RUN <command>
+#Run during image build
+CMD
+#Default Cmd
+ENTRYPOINT["app"]
+#Fixed cmd
+WORKDIR /app
+#ser working dir
+ENV VAR=value
+#set var
+EXPOSE 80
+#Expose port
+VOLUME /data
+#declare volume

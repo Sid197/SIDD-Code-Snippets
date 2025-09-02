@@ -1,0 +1,42 @@
+SSHFS (ChatGPT)
+
+Server (Ubuntu 1):192.168.1.14
+Client (Ubuntu 2):192.168.1.121
+
+Check is sshfs is installed or not :
+sshfs --version
+
+Install SSHFS on both systems
+using "sudo apt install sshfs -y"
+
+
+1.In Server [192.168.1.14]:
+Prepare a test directory/file
+mkdir -p /home/easemyai/sshfs_share (sshfs_share is for example name can vary)
+echo "Hello fom SSHFS test file" > /homeeasemyai/sshfs_share/test.txt
+
+2.Create mount point on Client[192.168.1.121]:
+mkdir -p ~/myserver_mount
+
+3.Mount using SSHFS[192.168.1.121]:
+$ sshfs easemyai@192.168.1.14:/home/easemyai/sshfs_share  ~/myserver_mount
+
+{Left side = remote path you want to share.(Server )
+Right side = local folder where it will appear.(Client)}
+
+$ ls ~/myserver_mount ---> test.txt
+
+
+4.Test it :
+$ cat ~/myserver_mount/test.txt
+$ echo "This is created from 192.168.1.121" > ~/myserver_mount/from_client.txt
+$ ls /home/easemyai/sshfs_share
+
+
+5.Unmount[When done, unmount from client (192.168.1.121)]:
+$ fusermount -u ~/myserver_mount
+
+
+6.Optional: Permanent Mount (fstab way)
+If you want it to mount automatically at boot, add this line in /etc/fstab on 192.168.1.121(Client):
+sshfs#easemyai@192.168.1.14:/home/easemyai/sshfs_share /home/youruser/myserver_mount fuse defaults,allow_other 0 0

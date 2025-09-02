@@ -1,0 +1,447 @@
+DEB Package Documentation 
+
+
+Prerequisites
+sudo apt update
+sudo apt install build-essential devscripts debhelper dh-make
+
+Step 1: Create the Package Structure
+Create a directory structure for your package:
+$mkdir -p mypackage-1.0/DEBIAN
+$mkdir -p mypackage-1.0/usr/bin
+$mkdir -p mypackage-1.0/usr/share/doc/mypackage
+
+
+Step 2: Add Your Files
+Place your executable files in the appropriate directories:
+Binaries go in usr/bin/
+Documentation in usr/share/doc/mypackage/
+Configuration files in etc/
+
+
+Step 3: Create the Control File
+Create mypackage-1.0/DEBIAN/control:
+Package: mypackage
+Version: 1.0
+Section: base
+Priority: optional
+Architecture: all
+Depends: bash
+Maintainer: Your Name <your.email@example.com>
+Description: Short description of your package
+ Longer description of what your package does.
+ Each line should be indented with a space.
+
+
+
+
+Step 4: Create Optional Scripts
+You can add these optional scripts in the DEBIAN/ directory:
+
+preinst - runs before installation
+postinst - runs after installation
+prerm - runs before removal
+postrm - runs after removal
+Make them executable: $ chmod 755 DEBIAN/preinst DEBIAN/postinst DEBIAN/prerm DEBIAN/postrm
+
+preinst
+#!/bin/bash
+set -e
+
+# This script is called with the following arguments:
+# $1 = install (for new installation)
+# $1 = upgrade, $2 = old-version (for upgrades)
+
+case "$1" in
+    install)
+        echo "Preparing to install mypackage..."
+        
+        # Check system requirements
+        if ! command -v python3 &> /dev/null; then
+            echo "Error: python3 is required but not installed"
+            exit 1
+        fi
+        
+        # Create necessary directories
+        mkdir -p /var/lib/mypackage
+        mkdir -p /var/log/mypackage
+        
+        # Create user if it doesn't exist
+        if ! id "mypackage" &>/dev/null; then
+            useradd --system --home-dir /var/lib/mypackage --shell /bin/false mypackage
+            echo "Created system user: mypackage"
+        fi
+        
+        # Stop conflicting services
+        if systemctl is-active --quiet old-service; then
+            systemctl stop old-service
+            echo "Stopped conflicting service: old-service"
+        fi
+        ;;
+        
+    upgrade)
+        OLD_VERSION="$2"
+        echo "Preparing to upgrade from version $OLD_VERSION..."
+        
+        # Backup configuration before upgrade
+        if [ -f /etc/mypackage/config.conf ]; then
+            cp /etc/mypackage/config.conf /etc/mypackage/config.conf.backup
+            echo "Backed up configuration file"
+        fi
+        
+        # Stop service before upgrade
+        if systemctl is-active --quiet mypackage; then
+            systemctl stop mypackage
+            echo "Stopped mypackage service for upgrade"
+        fi
+        ;;
+        
+    abort-upgrade)
+        echo "Upgrade aborted, cleaning up..."
+        # Clean up any partial upgrade state
+        ;;
+        
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
+
+postinst
+#!/bin/bash
+set -e
+
+# This script is called with the following arguments:
+# $1 = configure, $2 = most-recently-configured-version (for new install/upgrade)
+# $1 = triggered (when triggered by another package)
+
+case "$1" in
+    configure)
+        PREV_VERSION="$2"
+        
+        if [ -z "$PREV_VERSION" ]; then
+            echo "Configuring mypackage for first time..."
+        else
+            echo "Configuring mypackage (upgrading from $PREV_VERSION)..."
+        fi
+        
+        # Set proper permissions
+        chown -R mypackage:mypackage /var/lib/mypackage
+        chown -R mypackage:mypackage /var/log/mypackage
+        chmod 755 /usr/bin/mypackage
+        chmod 644 /etc/mypackage/config.conf
+        
+        # Create default configuration if it doesn't exist
+        if [ ! -f /etc/mypackage/config.conf ]; then
+            cat > /etc/mypackage/config.conf << EOF
+# MyPackage Configuration File
+# Generated automatically during installation
+debug=false
+port=8080
+data_dir=/var/lib/mypackage
+log_file=/var/log/mypackage/mypackage.log
+EOF
+            echo "Created default configuration file"
+        fi
+        
+        # Initialize database or data files
+        if [ ! -f /var/lib/mypackage/data.db ]; then
+            sudo -u mypackage /usr/bin/mypackage --init-db
+            echo "Initialized database"
+        fi
+        
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable mypackage.service
+        systemctl start mypackage.service
+        echo "Enabled and started mypackage service"
+        
+        # Update system databases
+        if command -v update-desktop-database &> /dev/null; then
+            update-desktop-database
+        fi
+        
+        if command -v gtk-update-icon-cache &> /dev/null; then
+            gtk-update-icon-cache -f /usr/share/icons/hicolor
+        fi
+        
+        # Migration from old version
+        if [ -n "$PREV_VERSION" ] && dpkg --compare-versions "$PREV_VERSION" lt "2.0"; then
+            echo "Migrating from version < 2.0..."
+            sudo -u mypackage /usr/bin/mypackage --migrate-config
+        fi
+        
+        echo "mypackage installation completed successfully"
+        ;;
+        
+    triggered)
+        echo "mypackage triggered by another package"
+        # Handle triggers here
+        ;;
+        
+    abort-upgrade|abort-remove|abort-deconfigure)
+        echo "Installation aborted, restoring previous state..."
+        # Restore from backup if needed
+        if [ -f /etc/mypackage/config.conf.backup ]; then
+            mv /etc/mypackage/config.conf.backup /etc/mypackage/config.conf
+        fi
+        ;;
+        
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
+
+
+prerm
+#!/bin/bash
+set -e
+
+# This script is called with the following arguments:
+# $1 = remove (for removal)
+# $1 = upgrade, $2 = new-version (for upgrades)
+# $1 = deconfigure (during conflicts)
+# $1 = failed-upgrade, $2 = old-version (when postinst fails)
+
+case "$1" in
+    remove)
+        echo "Preparing to remove mypackage..."
+        
+        # Stop and disable service
+        if systemctl is-active --quiet mypackage; then
+            systemctl stop mypackage
+            echo "Stopped mypackage service"
+        fi
+        
+        if systemctl is-enabled --quiet mypackage; then
+            systemctl disable mypackage
+            echo "Disabled mypackage service"
+        fi
+        
+        # Close any open connections or processes
+        if pgrep -f mypackage > /dev/null; then
+            echo "Terminating remaining mypackage processes..."
+            pkill -TERM -f mypackage
+            sleep 2
+            pkill -KILL -f mypackage 2>/dev/null || true
+        fi
+        
+        # Backup important data
+        if [ -d /var/lib/mypackage ] && [ "$(ls -A /var/lib/mypackage 2>/dev/null)" ]; then
+            echo "Backing up user data to /var/backups/mypackage..."
+            mkdir -p /var/backups/mypackage
+            tar -czf /var/backups/mypackage/data-$(date +%Y%m%d-%H%M%S).tar.gz -C /var/lib mypackage
+        fi
+        ;;
+        
+    upgrade)
+        NEW_VERSION="$2"
+        echo "Preparing for upgrade to version $NEW_VERSION..."
+        
+        # Stop service for upgrade
+        if systemctl is-active --quiet mypackage; then
+            systemctl stop mypackage
+            echo "Stopped mypackage service for upgrade"
+        fi
+        
+        # Don't remove data during upgrade
+        ;;
+        
+    deconfigure)
+        echo "Deconfiguring mypackage due to conflicts..."
+        # Handle deconfiguration
+        ;;
+        
+    failed-upgrade)
+        OLD_VERSION="$2"
+        echo "Failed upgrade from version $OLD_VERSION, cleaning up..."
+        # Clean up failed upgrade
+        ;;
+        
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
+
+postrm
+#!/bin/bash
+set -e
+
+# This script is called with the following arguments:
+# $1 = remove (after successful removal)
+# $1 = purge (when purging package)
+# $1 = upgrade, $2 = new-version (after upgrade)
+# $1 = disappear (when package is replaced)
+# $1 = failed-upgrade, $2 = old-version (when new postinst fails)
+# $1 = abort-install, $2 = old-version (when preinst fails)
+# $1 = abort-upgrade, $2 = old-version (when preinst fails during upgrade)
+
+case "$1" in
+    remove)
+        echo "mypackage has been removed"
+        
+        # Remove service file and reload daemon
+        systemctl daemon-reload
+        
+        # Update system databases
+        if command -v update-desktop-database &> /dev/null; then
+            update-desktop-database
+        fi
+        
+        # Keep user data and configuration for potential reinstall
+        echo "User data and configuration preserved in /var/lib/mypackage and /etc/mypackage"
+        ;;
+        
+    purge)
+        echo "Purging all mypackage data and configuration..."
+        
+        # Remove all configuration files
+        rm -rf /etc/mypackage
+        echo "Removed configuration directory"
+        
+        # Remove user data
+        rm -rf /var/lib/mypackage
+        echo "Removed data directory"
+        
+        # Remove log files
+        rm -rf /var/log/mypackage
+        echo "Removed log directory"
+        
+        # Remove system user
+        if id "mypackage" &>/dev/null; then
+            userdel mypackage
+            echo "Removed system user: mypackage"
+        fi
+        
+        # Remove any remaining files
+        find /tmp -name "*mypackage*" -type f -delete 2>/dev/null || true
+        
+        # Clean up system databases
+        if command -v update-desktop-database &> /dev/null; then
+            update-desktop-database
+        fi
+        
+        if command -v gtk-update-icon-cache &> /dev/null; then
+            gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+        fi
+        
+        echo "mypackage completely purged from system"
+        ;;
+        
+    upgrade)
+        NEW_VERSION="$2"
+        echo "Completed upgrade to version $NEW_VERSION"
+        # Post-upgrade cleanup if needed
+        ;;
+        
+    disappear)
+        echo "mypackage disappeared (replaced by another package)"
+        # Handle package replacement
+        ;;
+        
+    failed-upgrade)
+        OLD_VERSION="$2"
+        echo "Failed to upgrade from version $OLD_VERSION"
+        # Handle failed upgrade cleanup
+        ;;
+        
+    abort-install|abort-upgrade)
+        OLD_VERSION="$2"
+        echo "Installation/upgrade aborted, restoring state..."
+        # Restore previous state if possible
+        ;;
+        
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
+
+
+
+
+
+
+Step 5: Build the Package
+$ dpkg-deb --build mypackage-1.0
+$ sudo apt install mypackage-1.0
+
+
+
+
+
+
+==========================================
+
+
+easemyai@easemyai-Rj:~$ cd installer_new_linux/
+easemyai@easemyai-Rj:~/installer_new_linux$ tree
+.
+├── redx-installer
+│   ├── DEBIAN
+│   │   ├── control
+│   │   └── postinst
+│   ├── read.txt
+│   └── usr
+│       ├── bin
+│       │   ├── mywebsite.sh
+│       │   └── setup.sh
+│       └── share
+│           ├── applications
+│           │   └── redx.desktop
+│           ├── icons
+│           │   ├── hicolor
+│           │   │   └── 128x128
+│           │   │       └── redx.png
+│           │   └── logo.png
+│           └── redx-installer
+│               ├── configs
+│               │   ├── kafka
+│               │   │   ├── client.properties
+│               │   │   ├── create_topic.sh
+│               │   │   ├── kafka_server_jaas.conf
+│               │   │   ├── kafka.sh
+│               │   │   └── run_workaround.sh
+│               │   ├── mongo
+│               │   │   └── init-mongo.js
+│               │   ├── monitoring_configs
+│               │   │   ├── grafana_data
+│               │   │   ├── prometheus_data
+│               │   │   │   └── prometheus.yml
+│               │   │   └── promtail
+│               │   │       └── promtail.yaml
+│               │   ├── playback
+│               │   │   └── config.ini
+│               │   └── redis
+│               │       └── redis-entrypoint.sh
+│               ├── docker-compose.db.yml
+│               ├── docker-compose.kafka.yml
+│               ├── docker-compose.kong.yml
+│               ├── docker-compose.monitoring.yml
+│               ├── docker-compose.prod.yml
+│               ├── docker-compose.redis.yml
+│               ├── kong_setup.sh
+│               ├── LICENSE
+│               ├── README.md
+│               └── stop.sh
+├── redx-installer.deb
+├── redx-installer_old.deb
+├── redx-installer_without_docker_V-1.1.0.deb
+├── run_bat.exe
+└── uninstaller.sh
+
+20 directories, 33 files
+
+
+
+
