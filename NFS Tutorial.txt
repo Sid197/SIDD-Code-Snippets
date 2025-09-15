@@ -296,6 +296,35 @@ sudo ufw delete allow from 192.168.1.121 to any port 2049
 # On client:
 showmount -e 192.168.1.14  # Should show no exports or connection refused
 
+=======================================================================
+Core Access Control Options
+Read/Write Permissions
+rw = Read Write Access (Default)
+ro = Read Only 
+
+Synchronization Options
+Write Behavior Control
+sync = Writes to disk immediately (Security: High)
+async = Writes cached memory first (Security: Low)
+
+Security and User Mapping Options
+Root Access Control
+root_squash = Map root user to anonymous (DEFAULT) (Security: High)
+no_root_squash = Allow root to remain root (Security: Low)
+all_squash = Map all users to anonymous (Security: Highest)
+
+Performance and Behavior Options
+Subtree Checking
+subtree_check  = Verify file is in exported subtree
+no_subtree_check = Skip subtree verification
+
+Performance and Behavior Options
+Subtree Checking
+subtree_check = Verify file is in exported subtree
+no_subtree_check = Skip subtree verification
+
+
+
 
 
 
